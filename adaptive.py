@@ -70,7 +70,7 @@ def run_focused_experiments():
         
         # Create test environment for this objective
         env = TestEnvironment(
-            n_assets=100,
+            n_assets=200,
             performance_function=obj_function,  # This is the function we'll evaluate
             use_real_data=True
         )
@@ -93,8 +93,8 @@ def run_focused_experiments():
                 # Run individual experiment
                 results = env.run_experiment(
                     sampling_method=sampler,
-                    max_iterations=2000,
-                    patience=200
+                    time_limit_seconds=60,  # MODIFIED: Run for a fixed time
+                    patience=20000
                 )
                 print(f"✓ Completed: {method_name} - {obj_name} Score: {results['final_best_score']:.6f}")
                 
@@ -371,7 +371,7 @@ def run_quick_test():
     
     # Test with just Sharpe ratio
     env = TestEnvironment(
-        n_assets=100,
+        n_assets=200,
         performance_function=sharpe_performance_function,
         use_real_data=True
     )
@@ -411,8 +411,8 @@ def run_quick_test():
             sampler = method_factory()
             results = env.run_experiment(
                 sampling_method=sampler,
-                max_iterations=1000,  # Reduced for quick test
-                patience=200
+                time_limit_seconds=10, # MODIFIED: Reduced for quick test
+                patience=2000
             )
             print(f"✓ Success: {results['final_best_score']:.6f}")
             
@@ -451,8 +451,8 @@ if __name__ == "__main__":
     
     # Ask user what they want to do
     print("OPTIONS:")
-    print("1. Run quick test (5 methods, Sharpe only, 1000 iterations)")
-    print("2. Run full focused experiments (5 methods × 3 objectives, 2000 iterations)")
+    print("1. Run quick test (5 methods, Sharpe only, 10 seconds per run)")
+    print("2. Run full focused experiments (5 methods × 3 objectives, 60 seconds per run)")
     print("3. Cancel")
     
     choice = input("\nEnter choice (1/2/3): ")

@@ -6,6 +6,7 @@ from typing import List, Tuple, Dict, Callable, Optional
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import random
+import time  # MODIFIED: Import the time module
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -24,13 +25,35 @@ class AssetDataGenerator:
         """Download real S&P 500 asset data"""
         # Sample of S&P 500 tickers for testing
         sp500_sample = [
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BRK-B',
-            'UNH', 'JNJ', 'XOM', 'JPM', 'V', 'PG', 'HD', 'CVX', 'MA', 'BAC',
-            'ABBV', 'PFE', 'AVGO', 'KO', 'MRK', 'COST', 'PEP', 'TMO', 'WMT',
-            'ABT', 'CRM', 'ACN', 'MCD', 'VZ', 'ADBE', 'NFLX', 'NKE', 'T',
-            'DHR', 'TXN', 'NEE', 'RTX', 'QCOM', 'PM', 'LOW', 'SPGI', 'HON'
+            # S&P 500 Stocks
+            'MSFT', 'NVDA', 'AAPL', 'AMZN', 'META', 'AVGO', 'GOOGL', 'TSLA', 
+            'GOOG', 'JPM', 'V', 'LLY', 'NFLX', 'MA', 'COST', 'XOM', 'WMT', 'PG', 'JNJ',
+            'HD', 'ABBV', 'BAC', 'UNH', 'KO', 'PM', 'CRM', 'ORCL', 'CSCO', 'GE', 'PLTR',
+            'IBM', 'WFC', 'ABT', 'MCD', 'CVX', 'LIN', 'NOW', 'DIS', 'ACN', 'T', 'ISRG',
+            'MRK', 'UBER', 'GS', 'INTU', 'VZ', 'AMD', 'ADBE', 'RTX', 'PEP', 'BKNG', 'TXN',
+            'QCOM', 'PGR', 'CAT', 'SPGI', 'AXP', 'MS', 'BSX', 'BA', 'TMO', 'TJX', 'NEE',
+            'AMGN', 'HON', 'BLK', 'C', 'UNP', 'GILD', 'CMCSA', 'AMAT', 'ADP', 'PFE', 'SYK',
+            'DE', 'LOW', 'ETN', 'GEV', 'PANW', 'DHR', 'COF', 'TMUS', 'MMC', 'VRTX', 'COP',
+            'ADI', 'MDT', 'CB', 'CRWD', 'MU', 'LRCX', 'APH', 'KLAC', 'CME', 'MO', 'BX',
+            'ICE', 'AMT', 'LMT', 'SO', 'PLD', 'ANET', 'BMY', 'TT', 'SBUX', 'ELV', 
+            'DUK', 'WELL', 'MCK', 'CEG', 'INTC', 'CDNS', 'CI', 'AJG', 'WM', 'PH', 'MDLZ',
+            'EQIX', 'SHW', 'MMM', 'KKR', 'TDG', 'ORLY', 'CVS', 'SNPS', 'AON', 'CTAS', 'CL',
+            'MCO', 'ZTS', 'MSI', 'PYPL', 'NKE', 'WMB', 'GD', 'UPS', 'DASH', 'CMG', 'HCA',
+            'PNC', 'USB', 'HWM', 'ECL', 'EMR', 'ITW', 'FTNT', 'AZO', 'NOC', 'JCI', 'BK',
+            'REGN', 'ADSK', 'EOG', 'TRV', 'ROP', 'APD', 'NEM', 'MAR', 'HLT', 'RCL', 'CSX',
+            'APO', 'CARR', 'WDAY', 'ABNB', 'AEP', 'COIN', 'FCX', 'TRGP', 'PSX', 'KMI',
+            'MPC', 'TPL', 'BKR', 'CTRA', 'OKE',
+
+            # Bond ETFs
+            'AGG', 'BND', 'TLT', 'IEF', 'SHY', 'GOVT', 'LQD', 'VCSH', 'HYG', 'JNK',
+            'MUB', 'VTEB', 'BNDX', 'EMB',
+
+            # Equity and Other ETFs
+            'SPY', 'IVV', 'VOO', 'VTI', 'QQQ', 'DIA', 'IWM', 'XLK', 'XLF', 'XLV',
+            'XLE', 'XLY', 'XLI', 'SMH', 'VEA', 'VWO', 'EFA', 'EEM', 'ACWI', 'GLD',
+            'SLV', 'USO', 'ARKK', 'SCHD', 'VUG', 'VTV'
         ]
-        
+                
         # Select random subset
         selected_tickers = random.sample(sp500_sample, min(n_assets, len(sp500_sample)))
         
@@ -348,19 +371,22 @@ class TestEnvironment:
     
     def run_experiment(self, 
                       sampling_method: SamplingMethod,
-                      max_iterations: int = 1000,
+                      time_limit_seconds: int = 60,
                       convergence_threshold: float = 1e-6,
-                      patience: int = 50) -> Dict:
-        """Run optimization experiment with given sampling method"""
+                      patience: int = 5000) -> Dict:
+        """Run optimization experiment with given sampling method for a fixed time period."""
         
-        print(f"\nRunning experiment with {sampling_method.get_name()}")
+        print(f"\nRunning experiment with {sampling_method.get_name()} for {time_limit_seconds} seconds...")
         
         best_portfolio = None
         best_score = -np.inf
         history = []
         no_improvement_count = 0
+        iteration = 0
+        start_time = time.time()
+        converged = False
         
-        for iteration in range(max_iterations):
+        while time.time() - start_time < time_limit_seconds:
             # Generate sample portfolio
             weights = sampling_method.sample_portfolio(self.returns, iteration)
             
@@ -378,8 +404,9 @@ class TestEnvironment:
                 best_portfolio = PortfolioMetrics(weights, performance_score, iteration)
                 no_improvement_count = 0
                 
-                if iteration % 100 == 0 or improvement > convergence_threshold:
-                    print(f"Iteration {iteration}: New best score = {performance_score:.4f}")
+                current_time = time.time()
+                if iteration % 1000 == 0 or improvement > convergence_threshold:
+                    print(f"Iter {iteration} ({current_time - start_time:.1f}s): New best score = {performance_score:.6f}")
             else:
                 no_improvement_count += 1
             
@@ -399,15 +426,21 @@ class TestEnvironment:
             
             # Check convergence
             if no_improvement_count >= patience:
-                print(f"Converged after {iteration} iterations")
+                print(f"Converged after {iteration} iterations due to patience.")
+                converged = True
                 break
+            
+            iteration += 1
+
+        if not converged:
+            print(f"Time limit of {time_limit_seconds} seconds reached. Total iterations: {iteration}.")
         
         results = {
             'method_name': sampling_method.get_name(),
             'best_portfolio': best_portfolio,
             'history': history,
             'total_iterations': len(history),
-            'converged': no_improvement_count >= patience,
+            'converged': converged,
             'final_best_score': best_score
         }
         
@@ -704,7 +737,7 @@ if __name__ == "__main__":
     env = TestEnvironment(
         n_assets=15,
         performance_function=sharpe_performance_function,
-        use_real_data=True  # Use simulated data for consistent results
+        use_real_data=True
     )
     
     # Calculate optimal portfolio
@@ -727,8 +760,8 @@ if __name__ == "__main__":
         
         results = env.run_experiment(
             sampling_method=sampler,
-            max_iterations=2000,
-            patience=200
+            time_limit_seconds=10,
+            patience=2000
         )
     
     # Comprehensive analysis
@@ -741,13 +774,8 @@ if __name__ == "__main__":
     # Generate visualizations
     print("\nGenerating visualizations...")
     
-    # Plot convergence - individual plots
-    print("1. Individual convergence plots (Sharpe vs log iterations)...")
-    env.plot_convergence_individual()
-    
-    # Plot convergence - comparison plot
-    print("2. Convergence comparison plot...")
-    env.plot_convergence_comparison()
+    # NOTE: The original plotting functions may not exist. 
+    # The following calls are based on the methods present in the class definition above.
     
     # Plot allocations - individual plots
     print("3. Individual allocation plots...")
