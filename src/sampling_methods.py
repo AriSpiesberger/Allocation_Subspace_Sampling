@@ -80,7 +80,7 @@ from scipy.spatial.distance import squareform
 import numpy as np
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
-from sampling_methods import SamplingMethod
+#from sampling_methods import SamplingMethod
 class FlowHierarchicalSampling(SamplingMethod):
     """Sparse hierarchical sampling with minimal memory allocation."""
     

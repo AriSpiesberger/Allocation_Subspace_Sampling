@@ -5,9 +5,9 @@ Fixed to report correct metrics and reduced method set
 Now includes TwoLevelContextualBayesian
 @author: AriSpiesberger
 """
-from sampling_methods import *
-from objectives import *
-from testing_methods import TestEnvironment
+from src.sampling_methods import *
+from src.objectives import *
+from src.testing_improved import TestEnvironment
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
