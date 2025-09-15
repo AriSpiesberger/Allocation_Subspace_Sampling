@@ -134,17 +134,27 @@ class AssetDataGenerator:
         return returns_df, asset_names, price_series
 
 # Performance functions
-def sharpe_performance_function(weights: np.ndarray, returns: pd.DataFrame) -> float:
-    """Calculate Sharpe ratio for portfolio"""
-    portfolio_returns = returns.dot(weights)
-    mean_return = portfolio_returns.mean() * 252  # Annualized
-    volatility = portfolio_returns.std() * np.sqrt(252)  # Annualized
-    
-    if volatility == 0:
-        return 0
-    
-    risk_free_rate = 0.02
-    return (mean_return - risk_free_rate) / volatility
+def sharpe_performance_function(weights, returns_data):
+    """
+    Calculates the Sharpe Ratio for a given portfolio.
+    Returns -np.inf if the calculation fails.
+    """
+    try:
+        # Your existing calculation logic
+        portfolio_return = np.sum(returns_data.mean() * weights) * 252
+        portfolio_std = np.sqrt(np.dot(weights.T, np.dot(returns_data.cov() * 252, weights)))
+
+        # Check for division by zero
+        if portfolio_std == 0:
+            return -np.inf # Penalize portfolios with zero risk/return
+
+        sharpe_ratio = portfolio_return / portfolio_std
+        return sharpe_ratio
+
+    except Exception as e:
+        # If any other error occurs during calculation, return a very bad score
+        print(f"Warning: Could not calculate Sharpe Ratio. Error: {e}")
+        return -np.inf
 
 # Sampling methods
 class SamplingMethod(ABC):

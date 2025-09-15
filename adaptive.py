@@ -93,7 +93,7 @@ def run_focused_experiments():
                 # Run individual experiment
                 results = env.run_experiment(
                     sampling_method=sampler,
-                    time_limit_seconds=60,  # MODIFIED: Run for a fixed time
+                    time_limit_seconds=600,  # MODIFIED: Run for a fixed time
                     patience=20000
                 )
                 print(f"✓ Completed: {method_name} - {obj_name} Score: {results['final_best_score']:.6f}")
