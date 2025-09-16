@@ -12,11 +12,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
+from src.testing_improved import TestEnvironment, AssetDataGenerator # MODIFIED: Import AssetDataGenerator
 warnings.filterwarnings('ignore')
 
 def run_focused_experiments():
     """
-    Run focused experiments with only the best-performing methods + new TwoLevel approach
+    Run focused experiments with a shared dataset for all objectives.
     """
     
     # Define objectives - each reports its own metric
@@ -26,7 +27,7 @@ def run_focused_experiments():
         ('Calmar Ratio', calmar_performance_function)
     ]
     
-    # Updated set of methods including the new TwoLevelContextualBayesian
+    # Updated set of methods to test
     methods_to_test = [
         ('Random Uniform', lambda: RandomUniformSampling()),
         ('Fast Hierarchical', lambda: FastHierarchicalSampling(equal_weight_bias=0.2)),
@@ -52,6 +53,13 @@ def run_focused_experiments():
         ))
     ]
     
+    # --- Fetch data ONCE before all experiments ---
+    print("\nFetching shared asset data for all experiments...")
+    n_assets_to_use = 200
+    returns_data, asset_names, price_data = AssetDataGenerator.get_sp500_assets(n_assets_to_use)
+    print(f"Data for {len(asset_names)} assets fetched. All experiments will use this dataset.")
+    print("-" * 100)
+    
     # Results storage
     all_results = {}
     
@@ -61,18 +69,22 @@ def run_focused_experiments():
     print(f"Testing {len(objectives)} objectives × {len(methods_to_test)} methods = {len(objectives) * len(methods_to_test)} total experiments")
     print()
     
-    # Run experiments for each objective
+    # Run experiments for each objective using the SAME data
     for obj_name, obj_function in objectives:
         print(f"\n{'='*80}")
         print(f"OBJECTIVE: {obj_name.upper()}")
         print(f"Performance Metric: {obj_function.__name__}")
         print(f"{'='*80}")
         
-        # Create test environment for this objective
+        # Create test environment using the SHARED data
         env = TestEnvironment(
-            n_assets=200,
-            performance_function=obj_function,  # This is the function we'll evaluate
-            use_real_data=True
+            n_assets=len(asset_names),  # Use the actual number of assets fetched
+            performance_function=obj_function,
+            use_real_data=True,
+            # Pass the pre-loaded data
+            returns_data=returns_data,
+            asset_names=asset_names,
+            price_data=price_data
         )
         
         # Create samplers
@@ -93,7 +105,7 @@ def run_focused_experiments():
                 # Run individual experiment
                 results = env.run_experiment(
                     sampling_method=sampler,
-                    time_limit_seconds=60,  # MODIFIED: Run for a fixed time
+                    time_limit_seconds=60,
                     patience=20000
                 )
                 print(f"✓ Completed: {method_name} - {obj_name} Score: {results['final_best_score']:.6f}")
@@ -102,20 +114,20 @@ def run_focused_experiments():
                 print(f"❌ Failed: {method_name} - Error: {e}")
                 continue
         
-        # Store results
+        # Store results for this objective
         all_results[obj_name] = {
             'env': env,
             'samplers': samplers,
             'performance_function': obj_function
         }
         
-        # Print summary for this objective - NO theoretical optimum calculation
+        # Print summary for this objective
         print_objective_summary(env, obj_name, obj_function)
     
-    # Cross-objective analysis
+    # Perform final analysis across all objectives
     print_cross_objective_analysis(all_results)
     
-    # Create focused visualizations
+    # Create final visualizations
     create_focused_plots(all_results)
     
     return all_results

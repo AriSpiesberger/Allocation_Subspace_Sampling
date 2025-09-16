@@ -290,13 +290,21 @@ class TestEnvironment:
     def __init__(self, 
                  n_assets: int,
                  performance_function: Callable[[np.ndarray, pd.DataFrame], float],
-                 use_real_data: bool = True):
+                 use_real_data: bool = True,
+                 # MODIFIED: Add optional parameters to accept pre-loaded data
+                 returns_data: Optional[pd.DataFrame] = None,
+                 asset_names: Optional[List[str]] = None,
+                 price_data: Optional[pd.DataFrame] = None):
+        
         self.n_assets = n_assets
         self.use_real_data = use_real_data
         self.performance_function = performance_function
         
-        # Load data
-        if use_real_data:
+        # MODIFIED: Use pre-loaded data if provided, otherwise fetch it
+        if returns_data is not None and asset_names is not None and price_data is not None:
+            print("Using pre-loaded asset data for this environment.")
+            self.returns, self.asset_names, self.price_data = returns_data, asset_names, price_data
+        elif use_real_data:
             self.returns, self.asset_names, self.price_data = AssetDataGenerator.get_sp500_assets(n_assets)
         else:
             self.returns, self.asset_names, self.price_data = AssetDataGenerator.generate_simulated_assets(n_assets)
