@@ -36,9 +36,20 @@ Here is a concrete example
 | Asset 3 | 0.06   | 0.10 | 0.60   |
 | Asset 4 | 0.05   | 0.10 | 0.50   |
 
-Suppose all assets are uncorrelated except for Assets 3 and 4, which have a strong negative covariance of \(-0.8\). 
+Suppose all assets are uncorrelated except for Assets 3 and 4, which have a strong negative covariance of -0.8. 
 
 Thus, since Sharpe ratios do not induce a metric space and correlations introduce nontrivial interactions, sampling is tricky and expensive to search over all possible asset combinations would generally be required to find the optimal portfolio. 
 
-In this toy example, the optimal portfolio is to buy \textbf{only} Assets 3 and 4, resulting in a portfolio Sharpe ratio of \textbf{1.72}: far higher than any single asset achieves individually.
+In this toy example, the optimal portfolio is to buy only Assets 3 and 4, resulting in a portfolio Sharpe ratio of 1.72: far higher than any single asset achieves individually.
 
+
+This simple example illustrates three key points:
+
+1) Even perfect knowledge of individual asset Sharpe ratios does not identify the optimal portfolio.
+2) Optimal combinations often rely on hidden structure (such as specific correlations) that are invisible when examining assets in isolation.
+3) As the number of assets grows, optimal portfolios can become increasingly rare and sparse, making naive search methods impractical.
+
+#### Computational complexity problem
+The evidence above suggests a compelling need for more complete searches over the input space. Although sharpe was our selected toy example, there are many situations where one would want to search the space in some sense of completion. Furthermore, in our case we have $2^4$ portfolio compositions, however there may be as many as $$2^n$$ compositions for an unconstrained portfolio of n assets, (even in this binary case). In realistic portfolio optimization, you would be optimizing in n dimensions a continuous space. The reader should be reminded that the amount of atoms in the universe is $$2^{84}$$ or so, so we may easily be able to reach a place where even in parallel a computer cannot simply brute force all calculations. 
+
+We thus claim that under black-box conditions of our function f, with little assumptions, we must create a sampling method that will be able to reveal optimal, or near optimal portfolios, as well as informing our understanding of the distribution around them. 
