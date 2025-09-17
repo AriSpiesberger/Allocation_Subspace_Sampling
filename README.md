@@ -15,8 +15,8 @@ Let's set up a simple toy example. Suppose your objective function is the tradit
 
 The sharpe ratio for any asset (i) is defined as
 
-$S_i = \frac{\mathbb{E}[R_i] - r_f}{\sigma_i}$
+$$S_i = \frac{\mathbb{E}[R_i] - r_f}{\sigma_i}$$
 
 And for a process 
 
-$S_p = \frac{\mathbb{E}[R_p] - r_f}{\sigma_p} = \frac{\mathbf{w}^T \boldsymbol{\mu} - r_f}{\sqrt{\mathbf{w}^T \boldsymbol{\Sigma} \mathbf{w}}}$
+$$S_p = \frac{\mathbb{E}[R_p] - r_f}{\sigma_p} = \frac{\mathbf{w}^T \boldsymbol{\mu} - r_f}{\sqrt{\mathbf{w}^T \boldsymbol{\Sigma} \mathbf{w}}}$$
