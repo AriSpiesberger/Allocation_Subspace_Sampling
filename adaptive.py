@@ -30,16 +30,8 @@ def run_focused_experiments():
     
     # Set methods for the head-to-head comparison
     methods_to_test = [
-        ('Pure Bayesian', lambda: PureBayesianSampling(
-            n_initial_random=25,
-            kernel_type='matern52',
-            acquisition_function='ei'
-        )),
-        ('Hierarchical Bayesian', lambda: HierarchicalBayesianSampling(
-            n_initial_random=25,
-            kernel_type='matern52',
-            acquisition_function='ei'
-        ))
+        ('Random Sparse', lambda: RandomSparseSampling(sparsity_level=0.5)),
+        ('Hierarchical Sparse', lambda: HierarchicalSparseSampling(sparsity_level=0.5)),
     ]
     
     # --- Fetch data ONCE for all experiments ---
