@@ -35,3 +35,10 @@ Here is a concrete example
 | Asset 2 | 0.14   | 0.20 | 0.70   |
 | Asset 3 | 0.06   | 0.10 | 0.60   |
 | Asset 4 | 0.05   | 0.10 | 0.50   |
+
+Suppose all assets are uncorrelated except for Assets 3 and 4, which have a strong negative covariance of \(-0.8\). 
+
+Thus, since Sharpe ratios do not induce a metric space and correlations introduce nontrivial interactions, sampling is tricky and expensive to search over all possible asset combinations would generally be required to find the optimal portfolio. 
+
+In this toy example, the optimal portfolio is to buy \textbf{only} Assets 3 and 4, resulting in a portfolio Sharpe ratio of \textbf{1.72}: far higher than any single asset achieves individually.
+
