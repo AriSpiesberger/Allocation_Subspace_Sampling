@@ -64,7 +64,199 @@ class RandomSparseSampling(SamplingMethod):
     
     def get_name(self) -> str:
         return f"Random Sparse ({self.sparsity_level:.0%})"
+# You would add this class to the same file as the others
 
+class HierarchicalBayesianSampling(SamplingMethod):
+    """
+    Performs Bayesian optimization on the hierarchical split-ratios of a portfolio.
+    This transforms the constrained optimization of weights into an unconstrained
+    optimization of `n-1` independent split decisions.
+    """
+    def __init__(self,
+                 n_initial_random=30,
+                 acquisition_function='ei',
+                 kernel_type='matern52',
+                 refresh_clusters_every=250):
+        # --- Bayesian Optimization Parameters ---
+        self.n_initial_random = n_initial_random
+        self.acquisition_function = acquisition_function
+        self.kernel_type = kernel_type
+        self.alpha = 1e-3
+        
+        # --- Hierarchical Clustering Parameters ---
+        self.refresh_clusters_every = refresh_clusters_every
+        self.cluster_hierarchy = None
+        self.root_id = None
+        self.last_cluster_build = -1
+        
+        # --- State Tracking ---
+        self.X_observed = []  # Stores the (n-1) dim split-vectors
+        self.y_observed = []  # Stores performance scores
+        self.last_split_vector = None # Remembers the last vector sampled
+        self.gp = None
+        self.iteration_count = 0
+
+    def sample_portfolio(self, returns: pd.DataFrame, iteration: int) -> np.ndarray:
+        self.iteration_count = iteration
+        n_assets = len(returns.columns)
+        n_splits = n_assets - 1
+
+        # 1. Build or refresh the asset cluster tree if necessary
+        if (self.cluster_hierarchy is None or
+            (self.refresh_clusters_every > 0 and
+             iteration - self.last_cluster_build >= self.refresh_clusters_every)):
+            self._build_clusters(returns)
+            self.last_cluster_build = iteration
+
+        # 2. Initialize the Gaussian Process model on the first run
+        if self.gp is None:
+            self._initialize_gp()
+
+        # 3. Perform random sampling for the initial exploration phase
+        if iteration < self.n_initial_random:
+            splits = np.random.uniform(0, 1, n_splits)
+        # 4. Use Bayesian optimization to find the best splits
+        else:
+            try:
+                splits = self._bayesian_optimize(n_splits)
+            except Exception as e:
+                # Fallback to random sampling if optimization fails
+                if iteration % 100 == 0:
+                    print(f"Hierarchical BO failed (iter {iteration}): {e}")
+                splits = np.random.uniform(0, 1, n_splits)
+
+        # 5. Store the chosen splits and convert them to final asset weights
+        self.last_split_vector = splits
+        weights = self._splits_to_weights(splits, n_assets)
+        return weights
+
+    def update_observations(self, weights: np.ndarray, performance: float):
+        """
+        Updates the GP with the performance of the last sampled split-vector.
+        Note: We store the split-vector in X_observed, not the final weights.
+        """
+        if self.last_split_vector is not None:
+            self.X_observed.append(self.last_split_vector)
+            self.y_observed.append(performance)
+            
+            # Refit the GP with the new data point
+            if len(self.X_observed) >= 2:
+                try:
+                    # Keep the history to a manageable size
+                    max_samples = 150
+                    X = np.array(self.X_observed[-max_samples:])
+                    y = np.array(self.y_observed[-max_samples:])
+                    self.gp.fit(X, y)
+                except Exception as e:
+                    if self.iteration_count % 100 == 0:
+                        print(f"GP fitting failed: {e}")
+
+    def _splits_to_weights(self, splits: np.ndarray, n_assets: int) -> np.ndarray:
+        """Converts a vector of split-ratios into final asset weights."""
+        weights = np.ones(n_assets)
+        splits_iter = iter(splits)
+        
+        self._recursive_split_apportionment(self.root_id, 1.0, weights, splits_iter)
+
+        if weights.sum() > 0:
+            return weights / weights.sum()
+        return np.ones(n_assets) / n_assets # Failsafe
+
+    def _recursive_split_apportionment(self, cluster_id, parent_weight, weights, splits_iter):
+        """Recursively applies the splits down the tree."""
+        # If this is a leaf node (an asset), we're done with this branch
+        if cluster_id < len(weights):
+            weights[cluster_id] = parent_weight
+            return
+
+        # Get the left and right children of the current node
+        left_child, right_child = self.cluster_hierarchy[cluster_id]
+        
+        try:
+            # Get the split ratio for this node from the iterator
+            split_ratio = next(splits_iter)
+        except StopIteration:
+            # Failsafe if we run out of splits (should not happen in theory)
+            split_ratio = 0.5
+
+        # Apportion the parent's weight to the children
+        left_weight = parent_weight * split_ratio
+        right_weight = parent_weight * (1 - split_ratio)
+
+        # Recurse down to the left and right children
+        self._recursive_split_apportionment(left_child, left_weight, weights, splits_iter)
+        self._recursive_split_apportionment(right_child, right_weight, weights, splits_iter)
+
+    def _bayesian_optimize(self, n_splits: int):
+        from scipy.optimize import minimize
+        
+        def objective(splits):
+            # We want to maximize the acquisition function, so we minimize its negative
+            return -self._acquisition_function_value(splits.reshape(1, -1))
+
+        # The search space is a simple hypercube [0, 1] for each split
+        bounds = [(0, 1) for _ in range(n_splits)]
+        
+        # Generate several starting points for the local optimizer
+        starting_points = [np.random.uniform(0, 1, n_splits) for _ in range(5)]
+        if self.y_observed: # Start from the best point found so far
+            best_idx = np.argmax(self.y_observed)
+            starting_points.append(self.X_observed[best_idx])
+
+        best_splits = None
+        min_obj_val = np.inf
+
+        for x0 in starting_points:
+            res = minimize(objective, x0, method='L-BFGS-B', bounds=bounds,
+                           options={'maxiter': 75})
+            if res.success and res.fun < min_obj_val:
+                min_obj_val = res.fun
+                best_splits = res.x
+        
+        return best_splits if best_splits is not None else np.random.uniform(0, 1, n_splits)
+        
+    def get_name(self) -> str:
+        return f"Hierarchical Bayesian"
+        
+    # --- Helper methods (can be copied directly from PureBayesianSampling) ---
+    def _initialize_gp(self):
+        # This function is identical to the one in PureBayesianSampling
+        if self.kernel_type == 'matern32':
+            kernel = C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=1.5)
+        elif self.kernel_type == 'matern52':
+            kernel = C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=2.5)
+        else:
+            kernel = C(1.0, (1e-3, 1e3)) * RBF(1.0, (1e-2, 1e2))
+        self.gp = GaussianProcessRegressor(kernel=kernel, alpha=self.alpha,
+                                         normalize_y=True, n_restarts_optimizer=2,
+                                         random_state=42)
+
+    def _acquisition_function_value(self, X):
+        # This function is identical to the one in PureBayesianSampling...
+        if not self.y_observed: return np.array([0.0])
+        mu, sigma = self.gp.predict(X, return_std=True)
+        # ... (rest of the logic for EI, UCB, etc.)
+        f_best = np.max(self.y_observed)
+        with np.errstate(divide='warn', invalid='ignore'):
+            imp = mu - f_best
+            Z = imp / sigma
+            ei = imp * 0.5 * (1 + np.sign(Z) * np.sqrt(1 - np.exp(-2 * Z**2 / np.pi))) + \
+                 sigma * np.exp(-0.5 * Z**2) / np.sqrt(2 * np.pi)
+            ei[sigma == 0.0] = 0.0
+        return ei
+
+    # --- Tree building methods (copied directly from FastHierarchicalSampling) ---
+    def _build_clusters(self, returns: pd.DataFrame):
+        corr = returns.corr()
+        dist = np.sqrt(0.5 * (1 - corr))
+        link = linkage(squareform(dist), method='ward')
+        self.cluster_hierarchy = {}
+        n_assets = len(returns.columns)
+        for i, row in enumerate(link):
+            cluster_id = n_assets + i
+            left_child, right_child = int(row[0]), int(row[1])
+            self.cluster_hierarchy[cluster_id] = [left_child, right_child]
+        self.root_id = max(self.cluster_hierarchy.keys())
 # The following classes are new or corrected based on the provided code
 class PureBayesianSampling(SamplingMethod):
     """
@@ -410,6 +602,90 @@ class TwoLevelContextualBayesian(SamplingMethod):
     def get_name(self) -> str:
         return f"Two-Level Contextual"
 
+class HierarchicalSparseSampling(SamplingMethod):
+    """
+    Creates a sparse portfolio by pruning branches of the asset hierarchy tree.
+    It operates in the tree vector topology under uniform random conditions.
+    """
+    def __init__(self, sparsity_level=0.8, refresh_clusters_every=250):
+        self.sparsity_level = sparsity_level
+        self.refresh_clusters_every = refresh_clusters_every
+        self.cluster_hierarchy = None
+        self.root_id = None
+        self.last_cluster_build = -1
+
+    def sample_portfolio(self, returns: pd.DataFrame, iteration: int) -> np.ndarray:
+        n_assets = len(returns.columns)
+        n_splits = n_assets - 1
+
+        # 1. Build or refresh the asset cluster tree if necessary
+        if (self.cluster_hierarchy is None or
+            (self.refresh_clusters_every > 0 and
+             iteration - self.last_cluster_build >= self.refresh_clusters_every)):
+            self._build_clusters(returns)
+            self.last_cluster_build = iteration
+
+        # 2. Start with a uniform random split-vector
+        splits = np.random.uniform(0, 1, n_splits)
+
+        # 3. Induce sparsity by forcing some splits to 0 or 1
+        if n_splits > 0:
+            # Determine how many splits to "prune"
+            n_to_prune = int(self.sparsity_level * n_splits)
+            
+            # Randomly select indices to prune
+            prune_indices = np.random.choice(n_splits, size=n_to_prune, replace=False)
+            
+            # Set these splits to either 0 or 1 with equal probability
+            prune_values = np.random.randint(0, 2, size=n_to_prune)
+            splits[prune_indices] = prune_values
+
+        # 4. Convert the sparse split-vector to final asset weights
+        weights = self._splits_to_weights(splits, n_assets)
+        return weights
+
+    def _splits_to_weights(self, splits: np.ndarray, n_assets: int) -> np.ndarray:
+        """Converts a vector of split-ratios into final asset weights."""
+        weights = np.ones(n_assets)
+        splits_iter = iter(splits)
+        
+        self._recursive_split_apportionment(self.root_id, 1.0, weights, splits_iter)
+
+        if weights.sum() > 0:
+            return weights / weights.sum()
+        return np.ones(n_assets) / n_assets
+
+    def _recursive_split_apportionment(self, cluster_id, parent_weight, weights, splits_iter):
+        """Recursively applies the splits down the tree."""
+        if cluster_id < len(weights):
+            weights[cluster_id] = parent_weight
+            return
+
+        left_child, right_child = self.cluster_hierarchy[cluster_id]
+        
+        try:
+            split_ratio = next(splits_iter)
+        except StopIteration:
+            split_ratio = 0.5
+
+        self._recursive_split_apportionment(left_child, parent_weight * split_ratio, weights, splits_iter)
+        self._recursive_split_apportionment(right_child, parent_weight * (1 - split_ratio), weights, splits_iter)
+
+    def _build_clusters(self, returns: pd.DataFrame):
+        """Builds the asset hierarchy from returns data."""
+        corr = returns.corr()
+        dist = np.sqrt(0.5 * (1 - corr))
+        link = linkage(squareform(dist), method='ward')
+        self.cluster_hierarchy = {}
+        n_assets = len(returns.columns)
+        for i, row in enumerate(link):
+            cluster_id = n_assets + i
+            left_child, right_child = int(row[0]), int(row[1])
+            self.cluster_hierarchy[cluster_id] = [left_child, right_child]
+        self.root_id = max(self.cluster_hierarchy.keys())
+        
+    def get_name(self) -> str:
+        return f"Hierarchical Sparse ({self.sparsity_level:.0%})"
 # Export all classes
 __all__ = [
     'RandomUniformSampling',
@@ -417,5 +693,8 @@ __all__ = [
     'FastHierarchicalSampling',
     'PureBayesianSampling',
     'TreeLevelBayesian',
-    'TwoLevelContextualBayesian'
+    'TwoLevelContextualBayesian',
+    'HierarchicalBayesianSampling',
+    'HierarchicalSparseSampling'
+    
 ]

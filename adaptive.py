@@ -17,43 +17,32 @@ warnings.filterwarnings('ignore')
 
 def run_focused_experiments():
     """
-    Run focused experiments with a shared dataset for all objectives.
+    Run a focused head-to-head experiment comparing Pure Bayesian and Hierarchical Bayesian methods
+    across multiple objectives.
     """
     
-    # Define objectives - each reports its own metric
+    # MODIFIED: Restore all three objectives for a comprehensive comparison
     objectives = [
         ('Sharpe Ratio', sharpe_performance_function),
-        ('Monotonicity', monotonicity_performance_function), 
+        ('Monotonicity', monotonicity_performance_function),
         ('Calmar Ratio', calmar_performance_function)
     ]
     
-    # Updated set of methods to test
+    # Set methods for the head-to-head comparison
     methods_to_test = [
-        ('Random Uniform', lambda: RandomUniformSampling()),
-        ('Fast Hierarchical', lambda: FastHierarchicalSampling(equal_weight_bias=0.2)),
         ('Pure Bayesian', lambda: PureBayesianSampling(
-            n_initial_random=15,
-            kernel_type='matern52',
-            acquisition_function='ei',
-            alpha=1e-3
-        )),
-        ('Tree Level Bayesian', lambda: TreeLevelBayesian(
-            equal_weight_bias=0.2,
-            n_initial_random=20,
-            acquisition_function='ei',
-            kernel_type='matern52'
-        )),
-        ('Two-Level Contextual', lambda: TwoLevelContextualBayesian(
-            cluster_split_level=0.6,
-            min_cluster_size=3,
-            max_cluster_size=7,
             n_initial_random=25,
-            acquisition_function='ei',
-            kernel_type='matern52'
+            kernel_type='matern52',
+            acquisition_function='ei'
+        )),
+        ('Hierarchical Bayesian', lambda: HierarchicalBayesianSampling(
+            n_initial_random=25,
+            kernel_type='matern52',
+            acquisition_function='ei'
         ))
     ]
     
-    # --- Fetch data ONCE before all experiments ---
+    # --- Fetch data ONCE for all experiments ---
     print("\nFetching shared asset data for all experiments...")
     n_assets_to_use = 200
     returns_data, asset_names, price_data = AssetDataGenerator.get_sp500_assets(n_assets_to_use)
@@ -64,48 +53,43 @@ def run_focused_experiments():
     all_results = {}
     
     print("="*100)
-    print("FOCUSED PORTFOLIO OPTIMIZATION EXPERIMENTS")
+    print("MULTI-OBJECTIVE HEAD-TO-HEAD: PURE BAYESIAN vs. HIERARCHICAL BAYESIAN")
     print("="*100)
     print(f"Testing {len(objectives)} objectives × {len(methods_to_test)} methods = {len(objectives) * len(methods_to_test)} total experiments")
     print()
     
-    # Run experiments for each objective using the SAME data
+    # MODIFIED: Loop through all objectives
     for obj_name, obj_function in objectives:
         print(f"\n{'='*80}")
         print(f"OBJECTIVE: {obj_name.upper()}")
         print(f"Performance Metric: {obj_function.__name__}")
         print(f"{'='*80}")
         
-        # Create test environment using the SHARED data
         env = TestEnvironment(
-            n_assets=len(asset_names),  # Use the actual number of assets fetched
+            n_assets=len(asset_names),
             performance_function=obj_function,
             use_real_data=True,
-            # Pass the pre-loaded data
             returns_data=returns_data,
             asset_names=asset_names,
             price_data=price_data
         )
         
-        # Create samplers
         samplers = []
         for method_name, method_factory in methods_to_test:
             sampler = method_factory()
-            sampler._method_name = method_name  # Store clean method name
+            sampler._method_name = method_name
             samplers.append(sampler)
         
         print(f"Running {len(samplers)} methods for {obj_name}...")
         
-        # Run all experiments for this objective
         for i, sampler in enumerate(samplers):
             method_name = getattr(sampler, '_method_name', sampler.get_name())
             print(f"\n[{i+1}/{len(samplers)}] Testing: {method_name}")
             
             try:
-                # Run individual experiment
                 results = env.run_experiment(
                     sampling_method=sampler,
-                    time_limit_seconds=60,
+                    time_limit_seconds=300,
                     patience=20000
                 )
                 print(f"✓ Completed: {method_name} - {obj_name} Score: {results['final_best_score']:.6f}")
@@ -114,20 +98,16 @@ def run_focused_experiments():
                 print(f"❌ Failed: {method_name} - Error: {e}")
                 continue
         
-        # Store results for this objective
         all_results[obj_name] = {
             'env': env,
             'samplers': samplers,
             'performance_function': obj_function
         }
         
-        # Print summary for this objective
         print_objective_summary(env, obj_name, obj_function)
     
-    # Perform final analysis across all objectives
+    # MODIFIED: Restore cross-objective analysis and multi-objective plotting
     print_cross_objective_analysis(all_results)
-    
-    # Create final visualizations
     create_focused_plots(all_results)
     
     return all_results
