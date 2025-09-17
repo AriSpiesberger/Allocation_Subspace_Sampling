@@ -21,5 +21,6 @@ And for a process
 
 $$S_p = \frac{\mathbb{E}[R_p] - r_f}{\sigma_p} = \frac{\mathbf{w}^T \boldsymbol{\mu} - r_f}{\sqrt{\mathbf{w}^T \boldsymbol{\Sigma} \mathbf{w}}}$$
 
-To those who dont have a math or statistics background, what is happening here is that 
+To those who dont have a math or statistics background, what is happening here is that ...
+
 Clearly the covariance in the denominator shows that Sharpe is not additive. In fact, there is no guarentee of linearity at all since you can't decompose portfolio Sharpe into simple functions of individual asset Sharpes. Standard properties we might expect from a metric space, like the triangle inequality, don't hold. This means you can have two assets with mediocre individual Sharpe ratios that, when combined, produce a portfolio with a much higher Sharpe than either asset alone. The whole is genuinely different from the sum of its parts. 
