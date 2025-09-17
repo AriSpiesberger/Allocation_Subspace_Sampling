@@ -24,3 +24,14 @@ $$S_p = \frac{\mathbb{E}[R_p] - r_f}{\sigma_p} = \frac{\mathbf{w}^T \boldsymbol{
 To those who dont have a math or statistics background, what is happening here is that ...
 
 Clearly the covariance in the denominator shows that Sharpe is not additive. In fact, there is no guarentee of linearity at all since you can't decompose portfolio Sharpe into simple functions of individual asset Sharpes. Standard properties we might expect from a metric space, like the triangle inequality, don't hold. This means you can have two assets with mediocre individual Sharpe ratios that, when combined, produce a portfolio with a much higher Sharpe than either asset alone. The whole is genuinely different from the sum of its parts. 
+
+
+Here is a concrete example
+
+
+| Asset   | Return | Std  | Sharpe |
+|---------|--------|------|--------|
+| Asset 1 | 0.08   | 0.10 | 0.80   |
+| Asset 2 | 0.14   | 0.20 | 0.70   |
+| Asset 3 | 0.06   | 0.10 | 0.60   |
+| Asset 4 | 0.05   | 0.10 | 0.50   |
