@@ -455,8 +455,8 @@ class TestEnvironment:
             performance_score = self.predictor.predict_performance(weights)
             
             # Update Bayesian sampler history if applicable
-            if hasattr(sampling_method, 'update_history'):
-                sampling_method.update_history(weights, performance_score)
+            if hasattr(sampling_method, 'update_observations'):
+                sampling_method.update_observations(weights, performance_score)
             
             # Track best portfolio
             if performance_score > best_score:
