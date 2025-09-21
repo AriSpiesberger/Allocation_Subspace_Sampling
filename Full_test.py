@@ -1,23 +1,22 @@
-# comparative_experiment.py
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import time
 from typing import List, Tuple, Dict, Callable, Type
+import warnings
 
 # Assuming other scripts are in the same directory or a configured src folder
 from src.sampling_methods import SamplingMethod, HierarchicalBayesianSampling, PureBayesianSampling
 from src.objectives import sharpe_performance_function, calmar_performance_function
 from src.testing_improved import TestEnvironment, AssetDataGenerator
 
+warnings.filterwarnings('ignore', category=RuntimeWarning)
+
+
 class ComparativeExperimentRunner:
     """
-    Runs a comprehensive, scalable experiment to compare two sampling methods.
-
-    This class is designed to test a "tree topology" method against an 
-    "input space" method by scaling a given parameter (e.g., n_assets or
-    sampling_time) and running multiple randomized trials to ensure
-    statistical robustness.
+    Runs a robust, scalable experiment to compare two sampling methods by
+    focusing on the relative percentage gain within each randomized trial.
     """
     
     def __init__(self,
@@ -29,19 +28,7 @@ class ComparativeExperimentRunner:
                  num_trials: int = 5,
                  fixed_n_assets: int = 50,
                  fixed_time_limit: int = 30):
-        """
-        Initializes the experiment runner.
-
-        Args:
-            method_tree: The class of the tree-based sampling method.
-            method_input: The class of the input space-based sampling method.
-            performance_function: The objective function to optimize.
-            scaling_variable: The parameter to scale ('n_assets' or 'sampling_time').
-            scaling_values: A list of values for the scaling parameter.
-            num_trials: Number of random trials to run for each scaling value.
-            fixed_n_assets: The number of assets to use when scaling time.
-            fixed_time_limit: The time limit to use when scaling assets.
-        """
+        """Initializes the experiment runner."""
         self.method_tree_class = method_tree
         self.method_input_class = method_input
         self.performance_function = performance_function
@@ -60,41 +47,45 @@ class ComparativeExperimentRunner:
         self._asset_pool_data = None
         self._prepare_asset_pool()
         
-    def _prepare_asset_pool(self, pool_size: int = 200, history: str = "10y"):
+    def _prepare_asset_pool(self, pool_size: int = 500, history: str = "10y"):
         """Downloads a large pool of asset data once to be sampled from later."""
-        print(f"Downloading a large asset pool ({pool_size} assets, {history} history) for robust trials...")
+        print(f"Downloading a large asset pool (~{pool_size} assets, {history} history) for robust trials...")
+        # Note: This now calls the updated GetSP500Assets in testing_improved.py
         self._asset_pool_data = AssetDataGenerator.get_sp500_assets(pool_size, period=history)
         print("Asset pool is ready.")
 
     def _get_robust_data(self, n_assets: int, period_length_days: int = 504) -> Tuple[pd.DataFrame, List[str], pd.DataFrame]:
         """
-        Generates a randomized dataset for a single trial.
-        It samples random tickers and a random time slice from the main pool.
+        Generates a randomized dataset for a single trial by sampling
+        random tickers and a random time slice from the main pool.
         """
         pool_returns, pool_tickers, pool_prices = self._asset_pool_data
         
-        # 1. Select random tickers
+        # Select random tickers
         selected_tickers = np.random.choice(pool_tickers, n_assets, replace=False).tolist()
         
-        # 2. Select a random time period
+        # Select a random time period
         if len(pool_returns) <= period_length_days:
             start_idx = 0
         else:
             start_idx = np.random.randint(0, len(pool_returns) - period_length_days)
-        
         end_idx = start_idx + period_length_days
         
         # Slice data for the trial
-        trial_returns = pool_returns.iloc[start_idx:end_idx][selected_tickers]
-        trial_prices = pool_prices.iloc[start_idx:end_idx][selected_tickers]
+        trial_returns = pool_returns.iloc[start_idx:end_idx][selected_tickers].copy()
+        trial_prices = pool_prices.iloc[start_idx:end_idx][selected_tickers].copy()
         
-        return trial_returns.dropna(), list(trial_returns.columns), trial_prices.dropna()
+        # Ensure data is clean for this specific slice
+        trial_returns.dropna(axis=1, how='all', inplace=True)
+        trial_prices = trial_prices[trial_returns.columns] # Align prices with valid returns columns
+        
+        return trial_returns, list(trial_returns.columns), trial_prices
 
     def run(self):
         """Executes the full comparative experiment."""
         print(f"\n{'='*80}")
         print(f"Starting Experiment: Comparing {self.method_tree_class.__name__} vs. {self.method_input_class.__name__}")
-        print(f"Scaling by: {self.scaling_variable}")
+        print(f"Scaling by: {self.scaling_variable.replace('_', ' ').title()}")
         print(f"Objective: {self.performance_function.__name__}")
         print(f"Scaling values: {self.scaling_values}")
         print(f"Trials per value: {self.num_trials}")
@@ -109,106 +100,73 @@ class ComparativeExperimentRunner:
                 else: # 'sampling_time'
                     n_assets, time_limit = self.fixed_n_assets, val
 
-                # Get a fresh, randomized dataset for this trial
                 try:
                     returns, assets, prices = self._get_robust_data(n_assets)
-                    if len(assets) != n_assets:
-                        print(f"Warning: Could only fetch {len(assets)}/{n_assets} assets for this trial. Skipping.")
+                    actual_n_assets = len(assets)
+                    if actual_n_assets < n_assets * 0.9:
+                        print(f"Warning: Could only fetch {actual_n_assets}/{n_assets} assets for trial. Skipping.")
                         continue
                 except Exception as e:
                     print(f"Error generating data for trial: {e}. Skipping.")
                     continue
 
-                # Initialize methods and environment
-                method_tree = self.method_tree_class()
-                method_input = self.method_input_class()
-                
                 env = TestEnvironment(
-                    n_assets=n_assets,
-                    performance_function=self.performance_function,
-                    use_real_data=True,
-                    returns_data=returns,
-                    asset_names=assets,
-                    price_data=prices
+                    n_assets=actual_n_assets, performance_function=self.performance_function,
+                    use_real_data=True, returns_data=returns, asset_names=assets, price_data=prices
                 )
                 
-                # Run and store results for both methods
-                for method in [method_tree, method_input]:
-                    start_time = time.time()
-                    res = env.run_experiment(method, time_limit_seconds=time_limit)
-                    run_duration = time.time() - start_time
-                    
+                # Run Tree Method
+                res_tree = env.run_experiment(self.method_tree_class(), time_limit)
+                score_tree = res_tree['final_best_score']
+                print(f"  -> {res_tree['method_name']} | Score: {score_tree:.4f}")
+                
+                # Run Input Space Method
+                res_input = env.run_experiment(self.method_input_class(), time_limit)
+                score_input = res_input['final_best_score']
+                print(f"  -> {res_input['method_name']} | Score: {score_input:.4f}")
+
+                # Calculate percent gain for this trial
+                if score_input is not None and score_tree is not None and abs(score_input) > 1e-9:
+                    percent_gain = 100 * (score_tree - score_input) / abs(score_input)
+                    print(f"  => Trial Percent Gain for Tree Method: {percent_gain:+.2f}%")
                     self.results.append({
-                        'scaling_variable': self.scaling_variable,
                         'scaling_value': val,
                         'trial': i,
-                        'method_name': res['method_name'],
-                        'score': res['final_best_score'],
-                        'iterations': res['total_iterations'],
-                        'duration': run_duration
+                        'percent_gain': percent_gain,
                     })
-                    print(f"  -> {res['method_name']} finished. Score: {res['final_best_score']:.4f}")
         
         self.results_df = pd.DataFrame(self.results)
         self._analyze_and_plot()
 
     def _analyze_and_plot(self):
-        """Analyzes the results and generates the required plots."""
+        """Analyzes the results and generates the percent gain plot."""
         if not hasattr(self, 'results_df') or self.results_df.empty:
-            print("No results to analyze.")
+            print("\nNo results to analyze. This could happen if trials failed to complete.")
             return
 
-        summary = self.results_df.groupby(['scaling_value', 'method_name'])['score'].agg(['mean', 'std']).reset_index()
-        
-        self.plot_performance(summary)
+        summary = self.results_df.groupby('scaling_value')['percent_gain'].agg(['mean', 'std']).reset_index()
         self.plot_percent_difference(summary)
 
-    def plot_performance(self, summary_df: pd.DataFrame):
-        """Plots the performance comparison with error bands."""
-        plt.style.use('seaborn-v0_8-whitegrid')
-        fig, ax = plt.subplots(figsize=(12, 7))
-
-        method_tree_name = self.method_tree_class().get_name()
-        method_input_name = self.method_input_class().get_name()
-        
-        for name, color, marker in [(method_tree_name, 'blue', 'o'), (method_input_name, 'red', 's')]:
-            data = summary_df[summary_df['method_name'] == name]
-            ax.plot(data['scaling_value'], data['mean'], label=name, color=color, marker=marker, markersize=8)
-            ax.fill_between(data['scaling_value'], 
-                            data['mean'] - data['std'], 
-                            data['mean'] + data['std'], 
-                            color=color, alpha=0.15, label=f'{name} (1 Std Dev)')
-
-        ax.set_xlabel(f"Scaling Variable: {self.scaling_variable.replace('_', ' ').title()}", fontsize=12)
-        ax.set_ylabel(f"Performance Score ({self.performance_function.__name__})", fontsize=12)
-        ax.set_title(f"Performance Comparison: {method_tree_name} vs. {method_input_name}", fontsize=14, weight='bold')
-        ax.legend()
-        plt.tight_layout()
-        plt.show()
-
     def plot_percent_difference(self, summary_df: pd.DataFrame):
-        """Plots the percent gain of the tree-based method over the input-based method."""
+        """Plots the average percent gain with a standard deviation error band."""
         plt.style.use('seaborn-v0_8-whitegrid')
         fig, ax = plt.subplots(figsize=(12, 7))
 
         method_tree_name = self.method_tree_class().get_name()
-        method_input_name = self.method_input_class().get_name()
 
-        tree_data = summary_df[summary_df['method_name'] == method_tree_name].set_index('scaling_value')
-        input_data = summary_df[summary_df['method_name'] == method_input_name].set_index('scaling_value')
+        ax.plot(summary_df['scaling_value'], summary_df['mean'], color='green', marker='D', markersize=8, 
+                label=f'Avg. Gain of {method_tree_name}')
         
-        # Align dataframes for calculation
-        aligned_data = tree_data.join(input_data, lsuffix='_tree', rsuffix='_input')
+        ax.fill_between(summary_df['scaling_value'], 
+                        summary_df['mean'] - summary_df['std'], 
+                        summary_df['mean'] + summary_df['std'], 
+                        color='green', alpha=0.15, label='Gain (1 Std Dev)')
         
-        # Calculate percent difference
-        percent_gain = 100 * (aligned_data['mean_tree'] - aligned_data['mean_input']) / abs(aligned_data['mean_input'])
-        
-        ax.plot(percent_gain.index, percent_gain.values, color='green', marker='D', markersize=8, label='Percent Gain')
-        ax.axhline(0, color='black', linestyle='--', linewidth=1)
+        ax.axhline(0, color='black', linestyle='--', linewidth=1.5, label='No Improvement')
         
         ax.set_xlabel(f"Scaling Variable: {self.scaling_variable.replace('_', ' ').title()}", fontsize=12)
-        ax.set_ylabel(f"Percent Gain of {method_tree_name} (%)", fontsize=12)
-        ax.set_title(f"Relative Performance Gain of Tree Topology", fontsize=14, weight='bold')
+        ax.set_ylabel(f"Average Percent Gain (%)", fontsize=12)
+        ax.set_title(f"Relative Performance Gain of Tree Topology vs. Input Space", fontsize=14, weight='bold')
         ax.legend()
         plt.tight_layout()
         plt.show()
@@ -222,9 +180,9 @@ if __name__ == "__main__":
         method_input=PureBayesianSampling,
         performance_function=sharpe_performance_function,
         scaling_variable='n_assets',
-        scaling_values=[10, 25, 50, 75, 100], # X-axis values
-        num_trials=3,                          # Lower for a quick demo, use 5-10 for real results
-        fixed_time_limit=45                    # Fixed time for each run
+        scaling_values=[10, 25, 50, 100, 250, 500], # X-axis values
+        num_trials=5,                          # Use 5-10 for robust results
+        fixed_time_limit=60                    # Fixed time for each run
     )
     exp1.run()
     
@@ -235,8 +193,8 @@ if __name__ == "__main__":
         method_input=PureBayesianSampling,
         performance_function=sharpe_performance_function,
         scaling_variable='sampling_time',
-        scaling_values=[15, 30, 60, 90, 120],  # X-axis values (seconds)
-        num_trials=3,                           # Lower for a quick demo
-        fixed_n_assets=40                       # Fixed number of assets
+        scaling_values=[20, 40, 60, 90, 120],  # X-axis values (seconds)
+        num_trials=5,                           # Use 5-10 for robust results
+        fixed_n_assets=50                       # Fixed number of assets
     )
     exp2.run()

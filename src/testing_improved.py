@@ -25,34 +25,77 @@ class AssetDataGenerator:
         """Download real S&P 500 asset data"""
         # Sample of S&P 500 tickers for testing
         sp500_sample = [
-            # S&P 500 Stocks
-            'MSFT', 'NVDA', 'AAPL', 'AMZN', 'META', 'AVGO', 'GOOGL', 'TSLA', 
-            'GOOG', 'JPM', 'V', 'LLY', 'NFLX', 'MA', 'COST', 'XOM', 'WMT', 'PG', 'JNJ',
-            'HD', 'ABBV', 'BAC', 'UNH', 'KO', 'PM', 'CRM', 'ORCL', 'CSCO', 'GE', 'PLTR',
-            'IBM', 'WFC', 'ABT', 'MCD', 'CVX', 'LIN', 'NOW', 'DIS', 'ACN', 'T', 'ISRG',
-            'MRK', 'UBER', 'GS', 'INTU', 'VZ', 'AMD', 'ADBE', 'RTX', 'PEP', 'BKNG', 'TXN',
-            'QCOM', 'PGR', 'CAT', 'SPGI', 'AXP', 'MS', 'BSX', 'BA', 'TMO', 'TJX', 'NEE',
-            'AMGN', 'HON', 'BLK', 'C', 'UNP', 'GILD', 'CMCSA', 'AMAT', 'ADP', 'PFE', 'SYK',
-            'DE', 'LOW', 'ETN', 'GEV', 'PANW', 'DHR', 'COF', 'TMUS', 'MMC', 'VRTX', 'COP',
-            'ADI', 'MDT', 'CB', 'CRWD', 'MU', 'LRCX', 'APH', 'KLAC', 'CME', 'MO', 'BX',
-            'ICE', 'AMT', 'LMT', 'SO', 'PLD', 'ANET', 'BMY', 'TT', 'SBUX', 'ELV', 
-            'DUK', 'WELL', 'MCK', 'CEG', 'INTC', 'CDNS', 'CI', 'AJG', 'WM', 'PH', 'MDLZ',
-            'EQIX', 'SHW', 'MMM', 'KKR', 'TDG', 'ORLY', 'CVS', 'SNPS', 'AON', 'CTAS', 'CL',
-            'MCO', 'ZTS', 'MSI', 'PYPL', 'NKE', 'WMB', 'GD', 'UPS', 'DASH', 'CMG', 'HCA',
-            'PNC', 'USB', 'HWM', 'ECL', 'EMR', 'ITW', 'FTNT', 'AZO', 'NOC', 'JCI', 'BK',
-            'REGN', 'ADSK', 'EOG', 'TRV', 'ROP', 'APD', 'NEM', 'MAR', 'HLT', 'RCL', 'CSX',
-            'APO', 'CARR', 'WDAY', 'ABNB', 'AEP', 'COIN', 'FCX', 'TRGP', 'PSX', 'KMI',
-            'MPC', 'TPL', 'BKR', 'CTRA', 'OKE',
+            # S&P 500 & Major US Stocks
+            'MSFT', 'NVDA', 'AAPL', 'AMZN', 'META', 'AVGO', 'GOOGL', 'TSLA', 'GOOG', 'JPM', 
+            'V', 'LLY', 'NFLX', 'MA', 'COST', 'XOM', 'WMT', 'PG', 'JNJ', 'HD', 'ABBV', 
+            'BAC', 'UNH', 'KO', 'PM', 'CRM', 'ORCL', 'CSCO', 'GE', 'PLTR', 'IBM', 'WFC', 
+            'ABT', 'MCD', 'CVX', 'LIN', 'NOW', 'DIS', 'ACN', 'T', 'ISRG', 'MRK', 'UBER', 
+            'GS', 'INTU', 'VZ', 'AMD', 'ADBE', 'RTX', 'PEP', 'BKNG', 'TXN', 'QCOM', 'PGR', 
+            'CAT', 'SPGI', 'AXP', 'MS', 'BSX', 'BA', 'TMO', 'TJX', 'NEE', 'AMGN', 'HON', 
+            'BLK', 'C', 'UNP', 'GILD', 'CMCSA', 'AMAT', 'ADP', 'PFE', 'SYK', 'DE', 'LOW', 
+            'ETN', 'PANW', 'DHR', 'COF', 'TMUS', 'MMC', 'VRTX', 'COP', 'ADI', 'MDT', 'CB', 
+            'CRWD', 'MU', 'LRCX', 'APH', 'KLAC', 'CME', 'MO', 'BX', 'ICE', 'AMT', 'LMT', 
+            'SO', 'PLD', 'ANET', 'BMY', 'TT', 'SBUX', 'ELV', 'DUK', 'WELL', 'MCK', 'CEG', 
+            'INTC', 'CDNS', 'CI', 'AJG', 'WM', 'PH', 'MDLZ', 'EQIX', 'SHW', 'MMM', 'KKR', 
+            'TDG', 'ORLY', 'CVS', 'SNPS', 'AON', 'CTAS', 'CL', 'MCO', 'ZTS', 'MSI', 'PYPL', 
+            'NKE', 'WMB', 'GD', 'UPS', 'DASH', 'CMG', 'HCA', 'PNC', 'USB', 'HWM', 'ECL', 
+            'EMR', 'ITW', 'FTNT', 'AZO', 'NOC', 'JCI', 'BK', 'REGN', 'ADSK', 'EOG', 'TRV', 
+            'ROP', 'APD', 'NEM', 'MAR', 'HLT', 'RCL', 'CSX', 'APO', 'CARR', 'WDAY', 'ABNB', 
+            'AEP', 'COIN', 'FCX', 'TRGP', 'PSX', 'KMI', 'MPC', 'TPL', 'BKR', 'CTRA', 'OKE',
+            'EXC', 'AIG', 'MET', 'PRU', 'ALL', 'SCHW', 'FDX', 'GM', 'F', 'TGT', 'KHC', 
+            'KMB', 'DAL', 'UAL', 'LUV', 'AAL', 'MAR', 'HLT', 'WYNN', 'LVS', 'EXPE', 
+            'CCL', 'NCLH', 'EBAY', 'ETSY', 'ZM', 'DOCU', 'PTON', 'RBLX', 'U', 
+            'SHOP', 'SNOW', 'AI', 'DDOG', 'MDB', 'OKTA', 'TWLO', 'NET', 'TEAM', 'ZS',
+            'S', 'ROKU', 'SPOT', 'PINS', 'SNAP',
+            
+            # US Equity Sector ETFs
+            'XLK', 'XLF', 'XLV', 'XLE', 'XLY', 'XLI', 'XLP', 'XLU', 'XLB', 'XLRE', 'XLC',
 
-            # Bond ETFs
-            'AGG', 'BND', 'TLT', 'IEF', 'SHY', 'GOVT', 'LQD', 'VCSH', 'HYG', 'JNK',
-            'MUB', 'VTEB', 'BNDX', 'EMB',
+            # US Broad Market & Style ETFs
+            'SPY', 'IVV', 'VOO', 'VTI', 'QQQ', 'DIA', 'IWM', 'IWB', 'IWD', 'IWF', 'IWN',
+            'IWO', 'MDY', 'SCHD', 'VUG', 'VTV', 'VO', 'VB', 'SCHA', 'SCHG', 'SCHX', 'FNDX',
 
-            # Equity and Other ETFs
-            'SPY', 'IVV', 'VOO', 'VTI', 'QQQ', 'DIA', 'IWM', 'XLK', 'XLF', 'XLV',
-            'XLE', 'XLY', 'XLI', 'SMH', 'VEA', 'VWO', 'EFA', 'EEM', 'ACWI', 'GLD',
-            'SLV', 'USO', 'ARKK', 'SCHD', 'VUG', 'VTV'
-        ]
+            # International Equity ETFs
+            'VEA', 'VWO', 'EFA', 'EEM', 'ACWI', 'VXUS', 'IEFA', 'IEMG', 'IXUS', 'IDEV',
+            'EWW', 'EWJ', 'EWZ', 'INDA', 'EWG', 'EWU', 'EWC', 'MCHI', 'KWEB', 'FXI', 
+            'RSX', 'VPL', 'VGK', 'VNQ', 'VIGI', 'DEM', 'EDC', 'EZA', 'TUR', 'GREK',
+
+            # Bond & Fixed Income ETFs
+            'AGG', 'BND', 'TLT', 'IEF', 'SHY', 'GOVT', 'LQD', 'VCSH', 'VCIT', 'HYG', 
+            'JNK', 'BKLN', 'MUB', 'VTEB', 'BNDX', 'EMB', 'VWOB', 'IGOV', 'TIP', 'STIP',
+            'SHV', 'BIL', 'BSV', 'BIV', 'BLV', 'MBB', 'VMBS', 'PIM', 'BOND', 'TOTL',
+
+            # Commodity ETFs
+            'GLD', 'IAU', 'SLV', 'PPLT', 'PALL', 'USO', 'UCO', 'BNO', 'UNG', 'CORN',
+            'WEAT', 'SOYB', 'CANE', 'DBA', 'DBC', 'PDBC', 'GSG', 'GCC', 'USCI', 'CPER',
+
+            # Real Estate (REIT) ETFs
+            'VNQ', 'IYR', 'SCHH', 'RWR', 'XLRE', 'REZ', 'REM', 'MORT',
+
+            # Currency ETFs
+            'UUP', 'UDN', 'FXY', 'FXE', 'FXB', 'FXC', 'FXA', 'CYB',
+
+            # Alternative & Thematic ETFs
+            'ARKK', 'ARKG', 'ARKW', 'ARKQ', 'ARKF', 'SMH', 'SOXX', 'IGV', 'IBB', 'IYT',
+            'ITA', 'KBE', 'KRE', 'TAN', 'ICLN', 'PBW', 'BOTZ', 'AIQ', 'LIT', 'URA', 'MJ',
+            'IPO', 'BUZZ', 'BETZ', 'ESPO',
+            
+            # More Large/Mid Cap Stocks from S&P 500/400
+            'AMP', 'APA', 'AKAM', 'ALB', 'ARE', 'ATO', 'AVY', 'AWK', 'BALL', 'BBWI', 'BBY',
+            'BEN', 'BIIB', 'BIO', 'BR', 'BRO', 'CDW', 'CF', 'CFG', 'CHTR', 'CNC', 'CNP', 
+            'CPB', 'CPRT', 'CRL', 'CTSH', 'CTVA', 'DG', 'DGX', 'DHI', 'DPZ', 'DRI',
+            'DTE', 'DVN', 'DXCM', 'EA',  'EFX', 'EG', 'EL', 'ENPH', 'EPAM', 'EQR',
+            'ESS', 'EVRG', 'EW', 'FAST', 'FFIV', 'FIS', 'FITB',  'FRT', 'FSLR', 'GPN',
+            'GRMN', 'GWW', 'HAS', 'HBAN',  'HIG', 'HPE', 'HPQ', 'HRB', 'HST', 'HSY',
+            'HUM', 'ILMN', 'INCY', 'IP', 'IPG', 'IQV', 'IRM', 'IVZ', 'JBHT', 'JKHY', 'JPM',
+            'KEY', 'KIM', 'KMX', 'KR', 'LEN', 'LH', 'LHX', 'LKQ', 'LYB', 'LYV', 'MAS',
+            'MAA', 'MTB', 'MTCH', 'MKC', 'MKTX', 'MLM', 'MOH', 'MOS', 'MPWR', 'NDAQ', 'NI',
+            'NTRS', 'NVR', 'NWL', 'NWS', 'NWSA', 'O', 'ODFL', 'OGN', 'OMC', 'ON', 'PAYC',
+            'PAYX', 'PCAR', 'PCG', 'PEG', 'PPL', 'PPG', 'PVH', 'QRVO', 'REG', 'RF', 'RL',
+            'ROL', 'ROST', 'SBAC', 'SJM', 'SNA', 'STX', 'STLD', 'STE', 'SWK', 'SWKS',
+ 'SYF', 'TAP', 'TER', 'TFC', 'TFX', 'TSCO', 'TSN', 'TXT', 'TYL', 'ULTA', 'VFC',
+ 'VICI', 'VRSK', 'VRSN', 'VTR', 'WAB', 'WBD', 'WDC', 'WEC', 'WHR', 'WST', 'WY', 
+ 'XEL', 'XRAY', 'YUM', 'ZBH']
                 
         # Select random subset
         selected_tickers = random.sample(sp500_sample, min(n_assets, len(sp500_sample)))
@@ -391,7 +434,7 @@ class TestEnvironment:
                       sampling_method: SamplingMethod,
                       time_limit_seconds: int = 60,
                       convergence_threshold: float = 1e-6,
-                      patience: int = 5000) -> Dict:
+                      patience: int = 500000) -> Dict:
         """Run optimization experiment with given sampling method for a fixed time period."""
         
         print(f"\nRunning experiment with {sampling_method.get_name()} for {time_limit_seconds} seconds...")
@@ -779,7 +822,7 @@ if __name__ == "__main__":
         results = env.run_experiment(
             sampling_method=sampler,
             time_limit_seconds=10,
-            patience=2000
+            patience=20000
         )
     
     # Comprehensive analysis
