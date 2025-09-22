@@ -89,7 +89,7 @@ class AssetDataGenerator:
             'GRMN', 'GWW', 'HAS', 'HBAN',  'HIG', 'HPE', 'HPQ', 'HRB', 'HST', 'HSY',
             'HUM', 'ILMN', 'INCY', 'IP', 'IPG', 'IQV', 'IRM', 'IVZ', 'JBHT', 'JKHY', 'JPM',
             'KEY', 'KIM', 'KMX', 'KR', 'LEN', 'LH', 'LHX', 'LKQ', 'LYB', 'LYV', 'MAS',
-            'MAA', 'MTB', 'MTCH', 'MKC', 'MKTX', 'MLM', 'MOH', 'MOS', 'MPWR', 'NDAQ', 'NI',
+            'MAA', 'MTB', 'MTCH', 'MKC',  'MLM', 'MOH', 'MOS', 'MPWR', 'NDAQ', 'NI',
             'NTRS', 'NVR', 'NWL', 'NWS', 'NWSA', 'O', 'ODFL', 'OGN', 'OMC', 'ON', 'PAYC',
             'PAYX', 'PCAR', 'PCG', 'PEG', 'PPL', 'PPG', 'PVH', 'QRVO', 'REG', 'RF', 'RL',
             'ROL', 'ROST', 'SBAC', 'SJM', 'SNA', 'STX', 'STLD', 'STE', 'SWK', 'SWKS',
@@ -429,7 +429,7 @@ class TestEnvironment:
         except Exception as e:
             print(f"Warning: Error calculating optimal portfolio: {e}")
             return False
-    
+    @profile
     def run_experiment(self, 
                       sampling_method: SamplingMethod,
                       time_limit_seconds: int = 60,

@@ -180,7 +180,7 @@ if __name__ == "__main__":
         method_input=PureBayesianSampling,
         performance_function=sharpe_performance_function,
         scaling_variable='n_assets',
-        scaling_values=[10, 25, 50, 100, 250, 500], # X-axis values
+        scaling_values=[100, 250, 500], # X-axis values
         num_trials=5,                          # Use 5-10 for robust results
         fixed_time_limit=60                    # Fixed time for each run
     )
