@@ -192,24 +192,26 @@ class HierarchicalBayesianSampling(SamplingMethod):
         from scipy.optimize import minimize
         
         def objective(splits):
-            # We want to maximize the acquisition function, so we minimize its negative
             return -self._acquisition_function_value(splits.reshape(1, -1))
 
-        # The search space is a simple hypercube [0, 1] for each split
         bounds = [(0, 1) for _ in range(n_splits)]
         
-        # Generate several starting points for the local optimizer
-        starting_points = [np.random.uniform(0, 1, n_splits) for _ in range(5)]
-        if self.y_observed: # Start from the best point found so far
+        # --- MODIFICATION START ---
+        # Reduce the number of starting points and iterations for the local optimizer
+        # to prevent it from getting bogged down.
+        starting_points = [np.random.uniform(0, 1, n_splits) for _ in range(3)] # Was 5
+        if self.y_observed:
             best_idx = np.argmax(self.y_observed)
             starting_points.append(self.X_observed[best_idx])
-
+        # --- MODIFICATION END ---
+        
         best_splits = None
         min_obj_val = np.inf
 
         for x0 in starting_points:
             res = minimize(objective, x0, method='L-BFGS-B', bounds=bounds,
-                           options={'maxiter': 75})
+                           # --- MODIFICATION ---
+                           options={'maxiter': 50}) # Was 75
             if res.success and res.fun < min_obj_val:
                 min_obj_val = res.fun
                 best_splits = res.x

@@ -429,7 +429,7 @@ class TestEnvironment:
         except Exception as e:
             print(f"Warning: Error calculating optimal portfolio: {e}")
             return False
-    
+    @profile
     def run_experiment(self, 
                       sampling_method: SamplingMethod,
                       time_limit_seconds: int = 60,
@@ -455,8 +455,8 @@ class TestEnvironment:
             performance_score = self.predictor.predict_performance(weights)
             
             # Update Bayesian sampler history if applicable
-            if hasattr(sampling_method, 'update_history'):
-                sampling_method.update_history(weights, performance_score)
+            if hasattr(sampling_method, 'update_observations'):
+                sampling_method.update_observations(weights, performance_score)
             
             # Track best portfolio
             if performance_score > best_score:
@@ -622,7 +622,6 @@ class TestEnvironment:
                 if weight > 0.05:  # Only label significant weights
                     ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.001,
                            f'{weight:.3f}', ha='center', va='bottom', fontsize=7)
-            
             plot_idx += 1
         
         # Plot optimal if available
