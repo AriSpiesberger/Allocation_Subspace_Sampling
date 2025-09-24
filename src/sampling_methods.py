@@ -113,7 +113,7 @@ class HierarchicalBayesianSampling(SamplingMethod):
             self._initialize_gp()
 
         # 3. Perform random sampling for the initial exploration phase
-        if iteration < self.n_initial_random:
+        if iteration < self.n_initial_random or len(self.X_observed) < 2:
             splits = np.random.uniform(0, 1, n_splits)
         # 4. Use Bayesian optimization to find the best splits
         else:
@@ -130,14 +130,15 @@ class HierarchicalBayesianSampling(SamplingMethod):
         weights = self._splits_to_weights(splits, n_assets)
         return weights
 
-    def update_observations(self, weights: np.ndarray, performance: float):
+    def update_history(self, weights: np.ndarray, score: float):
         """
-        Updates the GP with the performance of the last sampled split-vector.
+        Updates the GP with the performance score of the last sampled split-vector.
         Note: We store the split-vector in X_observed, not the final weights.
+        This is the new standardized method name.
         """
         if self.last_split_vector is not None:
             self.X_observed.append(self.last_split_vector)
-            self.y_observed.append(performance)
+            self.y_observed.append(score)
             
             # Refit the GP with the new data point
             if len(self.X_observed) >= 2:
@@ -218,9 +219,7 @@ class HierarchicalBayesianSampling(SamplingMethod):
     def get_name(self) -> str:
         return f"Hierarchical Bayesian"
         
-    # --- Helper methods (can be copied directly from PureBayesianSampling) ---
     def _initialize_gp(self):
-        # This function is identical to the one in PureBayesianSampling
         if self.kernel_type == 'matern32':
             kernel = C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=1.5)
         elif self.kernel_type == 'matern52':
@@ -232,10 +231,8 @@ class HierarchicalBayesianSampling(SamplingMethod):
                                          random_state=42)
 
     def _acquisition_function_value(self, X):
-        # This function is identical to the one in PureBayesianSampling...
         if not self.y_observed: return np.array([0.0])
         mu, sigma = self.gp.predict(X, return_std=True)
-        # ... (rest of the logic for EI, UCB, etc.)
         f_best = np.max(self.y_observed)
         with np.errstate(divide='warn', invalid='ignore'):
             imp = mu - f_best
@@ -245,7 +242,6 @@ class HierarchicalBayesianSampling(SamplingMethod):
             ei[sigma == 0.0] = 0.0
         return ei
 
-    # --- Tree building methods (copied directly from FastHierarchicalSampling) ---
     def _build_clusters(self, returns: pd.DataFrame):
         corr = returns.corr()
         dist = np.sqrt(0.5 * (1 - corr))
@@ -288,22 +284,23 @@ class PureBayesianSampling(SamplingMethod):
             self._initialize_gp()
             self.gp_initialized = True
         
-        if iteration < self.n_initial_random:
+        if iteration < self.n_initial_random or len(self.X_observed) < 3:
             return self._sample_random_weights(n_assets)
         
-        if len(self.X_observed) >= 3:
-            try:
-                return self._bayesian_optimize(n_assets)
-            except Exception as e:
-                if iteration % 100 == 0:
-                    print(f"Bayesian optimization failed (iter {iteration}): {e}")
-                return self._sample_random_weights(n_assets)
-        else:
+        try:
+            return self._bayesian_optimize(n_assets)
+        except Exception as e:
+            if iteration % 100 == 0:
+                print(f"Bayesian optimization failed (iter {iteration}): {e}")
             return self._sample_random_weights(n_assets)
     
-    def update_observations(self, weights: np.ndarray, performance: float):
+    def update_history(self, weights: np.ndarray, score: float):
+        """
+        Updates the GP with the performance score of the last sampled portfolio.
+        This is the new standardized method name.
+        """
         self.X_observed.append(weights.copy())
-        self.y_observed.append(performance)
+        self.y_observed.append(score)
         
         if len(self.X_observed) >= 3 and self.gp is not None:
             try:
