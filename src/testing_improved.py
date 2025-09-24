@@ -429,7 +429,7 @@ class TestEnvironment:
         except Exception as e:
             print(f"Warning: Error calculating optimal portfolio: {e}")
             return False
-    @profile
+
     def run_experiment(self, 
                       sampling_method: SamplingMethod,
                       time_limit_seconds: int = 60,
