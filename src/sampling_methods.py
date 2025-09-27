@@ -144,7 +144,7 @@ class HierarchicalBayesianSampling(SamplingMethod):
             if len(self.X_observed) >= 2:
                 try:
                     # Keep the history to a manageable size
-                    max_samples = 150
+                    max_samples = 1000
                     X = np.array(self.X_observed[-max_samples:])
                     y = np.array(self.y_observed[-max_samples:])
                     self.gp.fit(X, y)
