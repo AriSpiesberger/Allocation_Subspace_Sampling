@@ -82,7 +82,7 @@ class ComparativeExperimentRunner:
         return trial_returns, list(trial_returns.columns), trial_prices
 
     def run(self):
-        """Executes the full comparative experiment."""
+        """Executes the full comparative experiment, always seeding with the equal-weight portfolio."""
         print(f"\n{'='*80}")
         print(f"Starting Experiment: Comparing {self.method_tree_class.__name__} vs. {self.method_input_class.__name__}")
         print(f"Scaling by: {self.scaling_variable.replace('_', ' ').title()}")
@@ -114,25 +114,51 @@ class ComparativeExperimentRunner:
                     n_assets=actual_n_assets, performance_function=self.performance_function,
                     use_real_data=True, returns_data=returns, asset_names=assets, price_data=prices
                 )
+
+                # --- SEEDING LOGIC ---
+                # 1. Use the equal-weight portfolio as the deterministic starting point.
+                initial_weights = np.ones(actual_n_assets) / actual_n_assets # MODIFIED LINE
                 
-                # Run Tree Method
-                res_tree = env.run_experiment(self.method_tree_class(), time_limit)
+                # 2. Evaluate its performance to get the starting score.
+                initial_score = self.performance_function(initial_weights, returns)
+                print(f"  Seeding both models with equal-weight portfolio. Score: {initial_score:.4f}") # MODIFIED LINE
+
+                # 3. Create the seed dictionary.
+                seed_portfolio = {
+                    'weights': initial_weights,
+                    'score': initial_score
+                }
+                
+                # 4. Instantiate both samplers WITH the identical seed.
+                sampler_tree = self.method_tree_class(seed_portfolio=seed_portfolio)
+                sampler_input = self.method_input_class(seed_portfolio=seed_portfolio)
+                
+                # Run Tree Method with the seeded sampler
+                res_tree = env.run_experiment(sampler_tree, time_limit)
                 score_tree = res_tree['final_best_score']
-                print(f"  -> {res_tree['method_name']} | Score: {score_tree:.4f}")
+                print(f"  -> {res_tree['method_name']} | Final Score: {score_tree:.4f}")
                 
-                # Run Input Space Method
-                res_input = env.run_experiment(self.method_input_class(), time_limit)
+                # Run Input Space Method with the seeded sampler
+                res_input = env.run_experiment(sampler_input, time_limit)
                 score_input = res_input['final_best_score']
-                print(f"  -> {res_input['method_name']} | Score: {score_input:.4f}")
+                print(f"  -> {res_input['method_name']} | Final Score: {score_input:.4f}")
 
                 # Calculate percent gain for this trial
                 if score_input is not None and score_tree is not None and abs(score_input) > 1e-9:
+                    gain_tree = score_tree - initial_score
+                    gain_input = score_input - initial_score
+                    print(f"  => Gain from seed: [Tree: {gain_tree:+.4f}, Input: {gain_input:+.4f}]")
+
                     percent_gain = 100 * (score_tree - score_input) / abs(score_input)
-                    print(f"  => Trial Percent Gain for Tree Method: {percent_gain:+.2f}%")
+                    print(f"  => Trial Percent Gain for Tree Method vs Input: {percent_gain:+.2f}%")
+                    
                     self.results.append({
                         'scaling_value': val,
                         'trial': i,
                         'percent_gain': percent_gain,
+                        'initial_score': initial_score,
+                        'score_tree': score_tree,
+                        'score_input': score_input
                     })
         
         self.results_df = pd.DataFrame(self.results)
@@ -180,7 +206,7 @@ if __name__ == "__main__":
         method_input=PureBayesianSampling,
         performance_function=sharpe_performance_function,
         scaling_variable='n_assets',
-        scaling_values=[10, 25, 50, 100, 250, 500], # X-axis values
+        scaling_values=[100, 250, 500], # X-axis values
         num_trials=5,                          # Use 5-10 for robust results
         fixed_time_limit=60                    # Fixed time for each run
     )

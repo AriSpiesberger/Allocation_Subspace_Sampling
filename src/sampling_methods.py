@@ -65,7 +65,6 @@ class RandomSparseSampling(SamplingMethod):
     def get_name(self) -> str:
         return f"Random Sparse ({self.sparsity_level:.0%})"
 # You would add this class to the same file as the others
-
 class HierarchicalBayesianSampling(SamplingMethod):
     """
     Performs Bayesian optimization on the hierarchical split-ratios of a portfolio.
@@ -76,7 +75,8 @@ class HierarchicalBayesianSampling(SamplingMethod):
                  n_initial_random=30,
                  acquisition_function='ei',
                  kernel_type='matern52',
-                 refresh_clusters_every=250):
+                 refresh_clusters_every=250,
+                 seed_portfolio: dict = None): # MODIFIED: Added seed_portfolio
         # --- Bayesian Optimization Parameters ---
         self.n_initial_random = n_initial_random
         self.acquisition_function = acquisition_function
@@ -88,6 +88,7 @@ class HierarchicalBayesianSampling(SamplingMethod):
         self.cluster_hierarchy = None
         self.root_id = None
         self.last_cluster_build = -1
+        self._cluster_assets_map = {} # MODIFIED: To store assets per cluster
         
         # --- State Tracking ---
         self.X_observed = []  # Stores the (n-1) dim split-vectors
@@ -95,6 +96,7 @@ class HierarchicalBayesianSampling(SamplingMethod):
         self.last_split_vector = None # Remembers the last vector sampled
         self.gp = None
         self.iteration_count = 0
+        self.seed_portfolio = seed_portfolio # MODIFIED: Store the seed
 
     def sample_portfolio(self, returns: pd.DataFrame, iteration: int) -> np.ndarray:
         self.iteration_count = iteration
@@ -111,6 +113,24 @@ class HierarchicalBayesianSampling(SamplingMethod):
         # 2. Initialize the Gaussian Process model on the first run
         if self.gp is None:
             self._initialize_gp()
+            
+        # MODIFICATION START: Handle the initial seed portfolio
+        if iteration == 0 and self.seed_portfolio:
+            seed_weights = self.seed_portfolio['weights']
+            seed_score = self.seed_portfolio['score']
+            
+            # Perform inverse transformation: weights -> splits
+            seed_splits = self._weights_to_splits(seed_weights)
+            
+            # Update history with this first point
+            self.last_split_vector = seed_splits
+            self.update_history(seed_weights, seed_score) # update_history uses self.last_split_vector
+            
+            # Set to 1 to skip random phase and start BO on the next iteration
+            self.n_initial_random = 1
+            self.seed_portfolio = None # Consume the seed
+            return seed_weights
+        # MODIFICATION END
 
         # 3. Perform random sampling for the initial exploration phase
         if iteration < self.n_initial_random or len(self.X_observed) < 2:
@@ -120,7 +140,6 @@ class HierarchicalBayesianSampling(SamplingMethod):
             try:
                 splits = self._bayesian_optimize(n_splits)
             except Exception as e:
-                # Fallback to random sampling if optimization fails
                 if iteration % 100 == 0:
                     print(f"Hierarchical BO failed (iter {iteration}): {e}")
                 splits = np.random.uniform(0, 1, n_splits)
@@ -131,20 +150,12 @@ class HierarchicalBayesianSampling(SamplingMethod):
         return weights
 
     def update_history(self, weights: np.ndarray, score: float):
-        """
-        Updates the GP with the performance score of the last sampled split-vector.
-        Note: We store the split-vector in X_observed, not the final weights.
-        This is the new standardized method name.
-        """
         if self.last_split_vector is not None:
             self.X_observed.append(self.last_split_vector)
             self.y_observed.append(score)
-            
-            # Refit the GP with the new data point
             if len(self.X_observed) >= 2:
                 try:
-                    # Keep the history to a manageable size
-                    max_samples = 1000
+                    max_samples = 100
                     X = np.array(self.X_observed[-max_samples:])
                     y = np.array(self.y_observed[-max_samples:])
                     self.gp.fit(X, y)
@@ -152,70 +163,94 @@ class HierarchicalBayesianSampling(SamplingMethod):
                     if self.iteration_count % 100 == 0:
                         print(f"GP fitting failed: {e}")
 
+    def _weights_to_splits(self, weights: np.ndarray) -> np.ndarray:
+        """
+        Inverse transformation: Converts asset weights back into the corresponding
+        hierarchical split-vector.
+        """
+        splits = []
+        
+        def _recursive_inverse(cluster_id):
+            if cluster_id < len(weights):
+                return
+
+            left_child, right_child = self.cluster_hierarchy[cluster_id]
+            left_assets = self._cluster_assets_map.get(left_child, [])
+            right_assets = self._cluster_assets_map.get(right_child, [])
+            left_weight_sum = np.sum(weights[left_assets])
+            right_weight_sum = np.sum(weights[right_assets])
+            total_weight = left_weight_sum + right_weight_sum
+            
+            split_ratio = left_weight_sum / total_weight if total_weight > 1e-9 else 0.5
+            splits.append(split_ratio)
+            
+            _recursive_inverse(left_child)
+            _recursive_inverse(right_child)
+
+        _recursive_inverse(self.root_id)
+        return np.array(splits)
+
+    def _build_clusters(self, returns: pd.DataFrame):
+        corr = returns.corr()
+        dist = np.sqrt(0.5 * (1 - corr))
+        link = linkage(squareform(dist), method='ward')
+        
+        self.cluster_hierarchy = {}
+        n_assets = len(returns.columns)
+        self._cluster_assets_map = {i: [i] for i in range(n_assets)}
+
+        for i, row in enumerate(link):
+            cluster_id = n_assets + i
+            left_child, right_child = int(row[0]), int(row[1])
+            self.cluster_hierarchy[cluster_id] = [left_child, right_child]
+            self._cluster_assets_map[cluster_id] = (
+                self._cluster_assets_map.get(left_child, []) + 
+                self._cluster_assets_map.get(right_child, [])
+            )
+            
+        self.root_id = max(self.cluster_hierarchy.keys())
+
+    # --- Keep the other methods from your original file ---
+    # (_splits_to_weights, _recursive_split_apportionment, _bayesian_optimize, 
+    #  get_name, _initialize_gp, _acquisition_function_value)
+    # The versions from your uploaded file are fine. Just make sure the class
+    # definition and the methods shown above are updated.
     def _splits_to_weights(self, splits: np.ndarray, n_assets: int) -> np.ndarray:
         """Converts a vector of split-ratios into final asset weights."""
         weights = np.ones(n_assets)
         splits_iter = iter(splits)
-        
         self._recursive_split_apportionment(self.root_id, 1.0, weights, splits_iter)
-
-        if weights.sum() > 0:
-            return weights / weights.sum()
-        return np.ones(n_assets) / n_assets # Failsafe
+        return weights / weights.sum() if weights.sum() > 0 else np.ones(n_assets) / n_assets
 
     def _recursive_split_apportionment(self, cluster_id, parent_weight, weights, splits_iter):
         """Recursively applies the splits down the tree."""
-        # If this is a leaf node (an asset), we're done with this branch
         if cluster_id < len(weights):
             weights[cluster_id] = parent_weight
             return
-
-        # Get the left and right children of the current node
         left_child, right_child = self.cluster_hierarchy[cluster_id]
-        
         try:
-            # Get the split ratio for this node from the iterator
             split_ratio = next(splits_iter)
         except StopIteration:
-            # Failsafe if we run out of splits (should not happen in theory)
             split_ratio = 0.5
-
-        # Apportion the parent's weight to the children
-        left_weight = parent_weight * split_ratio
-        right_weight = parent_weight * (1 - split_ratio)
-
-        # Recurse down to the left and right children
-        self._recursive_split_apportionment(left_child, left_weight, weights, splits_iter)
-        self._recursive_split_apportionment(right_child, right_weight, weights, splits_iter)
+        self._recursive_split_apportionment(left_child, parent_weight * split_ratio, weights, splits_iter)
+        self._recursive_split_apportionment(right_child, parent_weight * (1 - split_ratio), weights, splits_iter)
 
     def _bayesian_optimize(self, n_splits: int):
         from scipy.optimize import minimize
-        
         def objective(splits):
             return -self._acquisition_function_value(splits.reshape(1, -1))
-
         bounds = [(0, 1) for _ in range(n_splits)]
-        
-        # --- MODIFICATION START ---
-        # Reduce the number of starting points and iterations for the local optimizer
-        # to prevent it from getting bogged down.
-        starting_points = [np.random.uniform(0, 1, n_splits) for _ in range(3)] # Was 5
+        starting_points = [np.random.uniform(0, 1, n_splits) for _ in range(3)]
         if self.y_observed:
             best_idx = np.argmax(self.y_observed)
             starting_points.append(self.X_observed[best_idx])
-        # --- MODIFICATION END ---
-        
         best_splits = None
         min_obj_val = np.inf
-
         for x0 in starting_points:
-            res = minimize(objective, x0, method='L-BFGS-B', bounds=bounds,
-                           # --- MODIFICATION ---
-                           options={'maxiter': 50}) # Was 75
+            res = minimize(objective, x0, method='L-BFGS-B', bounds=bounds, options={'maxiter': 50})
             if res.success and res.fun < min_obj_val:
                 min_obj_val = res.fun
                 best_splits = res.x
-        
         return best_splits if best_splits is not None else np.random.uniform(0, 1, n_splits)
         
     def get_name(self) -> str:
@@ -244,18 +279,6 @@ class HierarchicalBayesianSampling(SamplingMethod):
             ei[sigma == 0.0] = 0.0
         return ei
 
-    def _build_clusters(self, returns: pd.DataFrame):
-        corr = returns.corr()
-        dist = np.sqrt(0.5 * (1 - corr))
-        link = linkage(squareform(dist), method='ward')
-        self.cluster_hierarchy = {}
-        n_assets = len(returns.columns)
-        for i, row in enumerate(link):
-            cluster_id = n_assets + i
-            left_child, right_child = int(row[0]), int(row[1])
-            self.cluster_hierarchy[cluster_id] = [left_child, right_child]
-        self.root_id = max(self.cluster_hierarchy.keys())
-# The following classes are new or corrected based on the provided code
 class PureBayesianSampling(SamplingMethod):
     """
     Pure Bayesian optimization directly over portfolio weights.
@@ -265,18 +288,19 @@ class PureBayesianSampling(SamplingMethod):
                  n_initial_random=25,
                  acquisition_function='ei', 
                  kernel_type='matern52',
-                 alpha=1e-3):
+                 alpha=1e-3,
+                 seed_portfolio: dict = None): # MODIFIED: Added seed_portfolio
         self.n_initial_random = n_initial_random
         self.acquisition_function = acquisition_function
         self.kernel_type = kernel_type
         self.alpha = alpha
         
-        # Bayesian optimization state
-        self.X_observed = []  # Portfolio weights observed
-        self.y_observed = []  # Performance scores observed
+        self.X_observed = []
+        self.y_observed = []
         self.iteration_count = 0
         self.gp = None
         self.gp_initialized = False
+        self.seed_portfolio = seed_portfolio # MODIFIED: Store the seed
 
     def sample_portfolio(self, returns: pd.DataFrame, iteration: int) -> np.ndarray:
         n_assets = len(returns.columns)
@@ -285,6 +309,20 @@ class PureBayesianSampling(SamplingMethod):
         if not self.gp_initialized:
             self._initialize_gp()
             self.gp_initialized = True
+        
+        # MODIFICATION START: Handle the initial seed portfolio
+        if iteration == 0 and self.seed_portfolio:
+            seed_weights = self.seed_portfolio['weights']
+            seed_score = self.seed_portfolio['score']
+            
+            # Update history with this first point
+            self.update_history(seed_weights, seed_score)
+            
+            # Set to 1 to skip random phase and start BO on the next iteration
+            self.n_initial_random = 1
+            self.seed_portfolio = None # Consume the seed
+            return seed_weights
+        # MODIFICATION END
         
         if iteration < self.n_initial_random or len(self.X_observed) < 3:
             return self._sample_random_weights(n_assets)
@@ -295,7 +333,10 @@ class PureBayesianSampling(SamplingMethod):
             if iteration % 100 == 0:
                 print(f"Bayesian optimization failed (iter {iteration}): {e}")
             return self._sample_random_weights(n_assets)
-    
+
+    # --- Keep the other methods from your original file ---
+    # The versions from your uploaded file are fine. Just make sure the class
+    # definition and sample_portfolio are updated.
     def update_history(self, weights: np.ndarray, score: float):
         """
         Updates the GP with the performance score of the last sampled portfolio.
